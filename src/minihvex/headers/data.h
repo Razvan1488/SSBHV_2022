@@ -72,6 +72,11 @@ typedef struct _GLOBAL_DATA
     TASK_CONFIGURATION          TaskData;
 
     MTRR_DATA                   MtrrData;
+
+    EPTP                        *Ept;
+
+    PEPT_PML4_ENTRY            pml4_entry;
+
 } GLOBAL_DATA, *PGLOBAL_DATA;
 
 extern GLOBAL_DATA gGlobalData;

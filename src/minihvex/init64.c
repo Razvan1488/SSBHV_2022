@@ -199,6 +199,16 @@ InitGlobalVariables(
     status = InitializeIdtHandlers(&gGlobalData.Idt);
     ASSERT(SUCCEEDED(status));
 
+    PEPT_PML4_ENTRY pml4_entry = HvAllocPoolWithTag(PoolAllocateZeroMemory, PAGE_SIZE, HEAP_PAGE_TAG, PAGE_SIZE);
+    if (pml4_entry == NULL)
+    {
+        return;
+    }
+    LOG("Just initialized pml4, adding it to gGlobalData\n");
+    gGlobalData.pml4_entry = pml4_entry;
+    LOG("Address of pml entry in INIT64 0x%X \n", pml4_entry);
+
+
     // there is no reason why we  need MTRR's earlier
     if (gGlobalData.CpuFeatures.MtrrSupport)
     {

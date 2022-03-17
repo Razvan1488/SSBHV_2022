@@ -2,6 +2,7 @@
 #define _EPT_H_
 
 #include "minihv.h"
+#include "log.h"
 
 #define SHIFT_FOR_EPT_PHYSICAL_ADDR         PAGE_SHIFT
 
@@ -317,6 +318,28 @@ STATUS
 EptInvalidate(
     IN      QWORD       Type,
     IN_OPT  EPTP*       Ept
+);
+
+STATUS
+EptMapGPA(
+    INOUT   EPTP* Ept,
+    IN      PHYSICAL_ADDRESS     GuestPhysicalAddress,
+    IN      DWORD                SizeInBytes,
+    IN      BYTE                 MemoryType,
+    IN      PHYSICAL_ADDRESS     HostPhysicalAddress,
+    IN      BYTE                 RwxAccess,
+    IN      BOOLEAN              Invalidate
+);
+
+STATUS
+EptInit(
+    OUT     PEPTP* Ept
+);
+
+PHYSICAL_ADDRESS
+EptGetHpaFromGpa(
+    IN EPTP* Ept,
+    IN PHYSICAL_ADDRESS Gpa
 );
 
 typedef

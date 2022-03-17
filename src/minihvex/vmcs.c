@@ -5,6 +5,7 @@
 #include "idt.h"
 #include "vmx_capability.h"
 #include "data.h"
+#include <hv_heap.h>
 
 #pragma warning(push)
 
@@ -170,6 +171,10 @@ VmcsInitializeGuestState(
 
     // RIP
     VmxWrite( VMCS_GUEST_RIP, gGlobalData.VmxCurrentSettings.GuestPreloaderAddress );
+
+    QWORD vmcsValue;
+    vmcsValue = VmxRead(VMCS_GUEST_RIP);
+    LOGP("\n\n Value read from RIP field is %U \n\n", vmcsValue);
 
     // RFLAGS
     VmxWrite( VMCS_GUEST_RFLAGS, VM_GUEST_RFLAGS );
@@ -416,6 +421,7 @@ VmcsInitializeHostState(
 
     // RIP
     // this will hold the address of our vmexit handler
+    VmxWrite(VMCS_HOST_RIP, (QWORD)(&VmPreexitHandler));
 
     // CS, SS, DS, ES, FS, GS and TR selectors
     // CS, selector must be != 0x0
@@ -651,6 +657,12 @@ VmcsInitializeVMXControls(
     {
         // need to set MSR bitmaps
         LOG( "We are using MSR bitmaps :)\n" );
+        LOG("Allocating the bitmaps :)\n");
+        PVOID allocatedVirtualAddress;
+        allocatedVirtualAddress = HvAllocPoolWithTag(PoolAllocateZeroMemory, PAGE_SIZE, HEAP_TEST_TAG, PAGE_SIZE);
+        LOG("Storing the adress of bitmap :)\n");
+        const QWORD physAdrress = VA2PA(allocatedVirtualAddress);
+        VmxWrite(VMCS_CONTROL_MSR_BITMAP_ADDRESS_FULL, physAdrress);
     }
     else
     {
@@ -667,6 +679,14 @@ VmcsInitializeVMXControls(
     if( IsBooleanFlagOn( secondaryProcBasedControls, PROC_BASED_SECONDARY_ENABLE_EPT ) )
     {
         /// EPT page table pointer
+        LOG("We are using EPT :)\n");
+        PEPTP Ept = NULL;
+        LOG("EPT before init = 0x%X\n", Ept);
+        EptInit(&Ept);
+        gGlobalData.Ept = Ept;
+        LOG("EPT after init = 0x%X\n", Ept);
+        LOG("EPT value = 0x%X\n", *(QWORD*)Ept);
+        VmxWrite(VMCS_CONTROL_EPT_POINTER_FULL, *(QWORD*)Ept);
     }
     else
     {

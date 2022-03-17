@@ -3,6 +3,7 @@
 #include "dmp_cpu.h"
 #include "native/memory.h"
 #include "data.h"
+#include "ept.h"
 
 #pragma warning(push)
 
@@ -374,7 +375,7 @@ GuestMapMemoryRange(
 
         /// TODO: map through EPT
         eptMappingResult = (void*)1; /* EptMapGuestPA((PVOID)addressToMap, PAGE_SIZE, memoryType, NULL, MAX_BYTE, FALSE, FALSE);*/
-
+        EptMapGPA(gGlobalData.Ept, addressToMap, PAGE_SIZE, memoryType, addressToMap, MAX_BYTE, FALSE);
         // we can receive NULL in case addressToMap is NULL
         if( ( NULL == eptMappingResult ) && ( NULL != addressToMap ) )
         {
