@@ -390,6 +390,14 @@ Preloader:
     dec     dl
 
     ; then we will execute the MBR
+    mov     ax,     1
+    cpuid
+    test    ecx,    (1 << 5)
+    jnz     .noValidDisk
+    test    ecx,    (1 << 27)
+    jnz     .noValidDisk
+    test    ecx,    (1 << 31)
+    jnz     .noValidDisk
 
     ; just to be safe, we reset es to 0
     xor     ax,     ax
@@ -412,7 +420,9 @@ Preloader:
     mov     gs,     ax
     mov     [gs:10],    WORD 'EE'
 
+.hlt
     hlt
+    jmp .hlt
 .end
 
 TestGPRSaving:

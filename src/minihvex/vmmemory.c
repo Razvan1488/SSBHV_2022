@@ -207,6 +207,8 @@ SimulateInt15h(
     ecx = ( DWORD ) pState->RegisterValues[RegisterRcx];
     edx = ( DWORD ) pState->RegisterValues[RegisterRdx];
 
+    LOG("eax %X ebx %X ecx %X \n",eax,ebx,ecx);
+
     bufferAddress = NULL;
     pMapEntry = NULL;
 

@@ -143,6 +143,101 @@ VmExitHandler(
             LOG( "VmExitSolveSIPI failed with status: 0x%x\n", status );
         }
         break;
+    case VM_EXIT_VMCALL:
+    {
+        QWORD fieldValue = 0;
+        QWORD guestRIPVmCall = 0;
+        fieldValue = VmxRead(VMCS_GUEST_CR0);
+        guestRIPVmCall = VmxRead(VMCS_GUEST_RIP);
+
+        if (!(fieldValue & 1) && (guestRIPVmCall < IVT_LIMIT))
+        {
+            if ((ProcessorState->RegisterArea.RegisterValues[RegisterRax] & 0xFFFF) == INT15_E820)
+            {
+                PHYSICAL_ADDRESS hpa;
+                PWORD hvaRsp;
+                QWORD guestssSelector;
+                QWORD guestRspAddress;
+                DWORD stackSize = 3 * sizeof(WORD);
+
+                guestssSelector = VmxRead(VMCS_GUEST_SS_SELECTOR);
+                guestRspAddress = (guestssSelector << 4) + guestRSP;
+                ASSERT(IsInSameBoundary(guestRspAddress, stackSize, PAGE_SIZE));
+
+                ASSERT(SUCCEEDED(SimulateInt15h(&gGlobalData.SystemInformation.MemoryMap)));
+
+                hpa = EptGetHpaFromGpa(gGlobalData.Ept, (PHYSICAL_ADDRESS)guestRspAddress);
+
+                hvaRsp = MapMemory(hpa, stackSize);
+                ASSERT(hvaRsp);
+
+                if (ProcessorState->RegisterArea.Rflags & RFLAGS_CARRY_FLAG_BIT)
+                {
+                    hvaRsp[2] |= RFLAGS_CARRY_FLAG_BIT;
+                }
+                else
+                {
+                    hvaRsp[2] &= ~(RFLAGS_CARRY_FLAG_BIT);
+                }
+                UnmapMemory(hvaRsp, stackSize);
+
+                VmAdvanceGuestRipByInstrLength(&ProcessorState->RegisterArea);
+                solvedProblem = TRUE;
+            }
+        }
+        else
+        {
+            GuestInjectEvent(ExceptionNMI, ExceptionInvalidOpcode, NULL);
+        }
+    }
+    break;
+    case VM_EXIT_CPUID:
+    {
+        LOG("We hit CPUID\n");
+        DWORD index = (DWORD)ProcessorState->RegisterArea.RegisterValues[RegisterRax];
+        DWORD subIndex = (DWORD)ProcessorState->RegisterArea.RegisterValues[RegisterRcx];
+
+        CPUID_INFO cpuInfo = { 0 };
+
+        __cpuidex(cpuInfo.values, index, subIndex);
+
+        if (index == 1)
+        {
+            cpuInfo.FeatureInformation.ecx.VMX = 0;
+            cpuInfo.FeatureInformation.ecx.SMX = 0;
+
+            cpuInfo.FeatureInformation.ecx.HV = 0;
+
+            cpuInfo.FeatureInformation.ecx.OSXSAVE = IsBooleanFlagOn(VmxRead(VMCS_GUEST_CR4), CR4_OSXSAVE);
+        }
+
+        ProcessorState->RegisterArea.RegisterValues[RegisterRax] = cpuInfo.eax;
+        ProcessorState->RegisterArea.RegisterValues[RegisterRbx] = cpuInfo.ebx;
+        ProcessorState->RegisterArea.RegisterValues[RegisterRcx] = cpuInfo.ecx;
+        ProcessorState->RegisterArea.RegisterValues[RegisterRdx] = cpuInfo.edx;
+
+        VmAdvanceGuestRipByInstrLength(&ProcessorState->RegisterArea);
+        solvedProblem = TRUE;
+    }
+    break;
+    case VM_EXIT_XSETBV:
+    {
+        LOG("We hit XSETBV \n");
+        LOG("eax %X ecx %X edx %X \n", (DWORD)ProcessorState->RegisterArea.RegisterValues[RegisterRax],
+                                       (DWORD)ProcessorState->RegisterArea.RegisterValues[RegisterRcx],
+                                       (DWORD)ProcessorState->RegisterArea.RegisterValues[RegisterRdx]
+
+                                        );
+        QWORD Features = 0;
+        Features = Features + ((QWORD)ProcessorState->RegisterArea.RegisterValues[RegisterRdx] << 32);
+        Features = Features + (QWORD)ProcessorState->RegisterArea.RegisterValues[RegisterRax];
+        _xsetbv(XCR0_INDEX, Features);
+        LOG("Passed xsetbv \n");
+        VmAdvanceGuestRipByInstrLength(&ProcessorState->RegisterArea);
+
+        solvedProblem = TRUE;
+    }
+    break;
     default:
         LOG( "Exit reason unknown: %d\n", exitReason.BasicExitReason );
     }

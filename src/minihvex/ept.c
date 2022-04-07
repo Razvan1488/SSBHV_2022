@@ -32,8 +32,6 @@ STATUS EptInit(OUT PEPTP* Ept)
 	return STATUS_SUCCESS;
 }
 
-
-
 STATUS EptMapGPA(INOUT EPTP* Ept, IN PHYSICAL_ADDRESS GuestPhysicalAddress, IN DWORD SizeInBytes, IN BYTE MemoryType, IN PHYSICAL_ADDRESS HostPhysicalAddress, IN BYTE RwxAccess, IN BOOLEAN Invalidate)
 {
 	UNREFERENCED_PARAMETER(SizeInBytes);
@@ -93,7 +91,7 @@ STATUS EptMapGPA(INOUT EPTP* Ept, IN PHYSICAL_ADDRESS GuestPhysicalAddress, IN D
 	else
 	{
 		//Get PT address
-		pt_entry = (PEPT_PT_ENTRY)(PA2VA((pd_entry_pt + index_pd)->PhysicalAddress << SHIFT_FOR_EPT_PHYSICAL_ADDR));
+		pt_entry = (PEPT_PT_ENTRY)((pd_entry_pt + index_pd)->PhysicalAddress << SHIFT_FOR_EPT_PHYSICAL_ADDR);
 	}
 
 	if (pt_entry[index_pt].PhysicalAddress == 0)
@@ -209,20 +207,43 @@ EptGetHpaFromGpa(
 	PHYSICAL_ADDRESS result;
 	QWORD guestPhysicalAddress = (QWORD)Gpa;
 
-	PEPT_PML4_ENTRY pml4_entry = (PEPT_PML4_ENTRY)((Ept->PhysicalAddress) << SHIFT_FOR_EPT_PHYSICAL_ADDR);
+	PEPT_PML4_ENTRY pml4_entry = NULL;
+	PEPT_PDPT_ENTRY_PD pdpt_entry_pd = NULL;
+	PEPT_PD_ENTRY_PT pd_entry_pt = NULL;
+	PEPT_PT_ENTRY pt_entry = NULL;
 
 	QWORD index_pml4 = MASK_EPT_PML4_OFFSET(guestPhysicalAddress);
-	PEPT_PDPT_ENTRY_PD pdpt_entry_pd = (PEPT_PDPT_ENTRY_PD)((pml4_entry + index_pml4)->PhysicalAddress << SHIFT_FOR_EPT_PHYSICAL_ADDR);
-
 	QWORD index_pdpt = MASK_EPT_PDPTE_OFFSET(guestPhysicalAddress);
-	PEPT_PD_ENTRY_PT pd_entry_pt = (PEPT_PD_ENTRY_PT)((pdpt_entry_pd + index_pdpt)->PhysicalAddress << SHIFT_FOR_EPT_PHYSICAL_ADDR);
-
 	QWORD index_pd = MASK_EPT_PDE_OFFSET(guestPhysicalAddress);
-	PEPT_PT_ENTRY pt_entry = (PEPT_PT_ENTRY)((pd_entry_pt + index_pd)->PhysicalAddress << SHIFT_FOR_EPT_PHYSICAL_ADDR); // get the addr from PD table
-
 	QWORD index_pt = MASK_EPT_PTE_OFFSET(guestPhysicalAddress);
 
-	result = (PHYSICAL_ADDRESS)(pt_entry[index_pt].PhysicalAddress << SHIFT_FOR_EPT_PHYSICAL_ADDR);
+	LOG("Address to convert: %X and indexes %U %U %U %U\n",(QWORD)Gpa,index_pml4,index_pdpt,index_pd,index_pt);
+	pml4_entry = gGlobalData.pml4_entry;
+	if (pml4_entry == NULL)
+	{
+		LOG("No pml4 entry for GPA %U", guestPhysicalAddress);
+		return (PHYSICAL_ADDRESS)0;
+	}
+	pdpt_entry_pd = (PEPT_PDPT_ENTRY_PD)(PA2VA((pml4_entry + index_pml4)->PhysicalAddress << SHIFT_FOR_EPT_PHYSICAL_ADDR));
+	if (pdpt_entry_pd == NULL)
+	{
+		LOG("No pdpt entry for GPA %U", guestPhysicalAddress);
+		return (PHYSICAL_ADDRESS)0;
+	}
+	pd_entry_pt = (PEPT_PD_ENTRY_PT)(PA2VA((pdpt_entry_pd + index_pdpt)->PhysicalAddress << SHIFT_FOR_EPT_PHYSICAL_ADDR));
+	if (pd_entry_pt == NULL)
+	{
+		LOG("No pd entry for GPA %U", guestPhysicalAddress);
+		return (PHYSICAL_ADDRESS)0;
+	}
+	pt_entry = (PEPT_PT_ENTRY)(PA2VA((pd_entry_pt + index_pd)->PhysicalAddress << SHIFT_FOR_EPT_PHYSICAL_ADDR)); // get the addr from PD table
+	if (pt_entry == NULL)
+	{
+		LOG("No pd entry for GPA %U", guestPhysicalAddress);
+		return (PHYSICAL_ADDRESS)0;
+	}
+	result = (PHYSICAL_ADDRESS)((pt_entry[index_pt].PhysicalAddress << SHIFT_FOR_EPT_PHYSICAL_ADDR) + MASK_EPT_PAGE_OFFSET(guestPhysicalAddress) );
+	LOG("Converted address %X \n",result);
 
 	return result;
 }
